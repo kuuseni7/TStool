@@ -68,9 +68,25 @@ def st_stderr(dst):
 
 st.title("Iot Time Series Synthetic Data Generator")
 
+periods = None
+base_amount = None
 feature_dict = {}
-st.sidebar.subheader("Select Sensor")
+factor_list = []
 
+# ---------------------------
+# select time period
+st.sidebar.subheader("Input start date and end date")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    start_date = st.sidebar.date_input(
+        "Start date", datetime.datetime(2021, 1, 1)
+    )
+with col2:
+    end_date = st.sidebar.date_input(
+        "End date", datetime.datetime(2021, 1, 3)
+    )
+daterange = pd.date_range(start_date, end_date)
+st.sidebar.subheader("Select Sensor")
 sensor_flag = st.sidebar.checkbox("Temperature")
 if sensor_flag:
 
@@ -85,13 +101,24 @@ if sensor_flag:
         )
         feature_dict[feat] = feat_val_l.split(",")
 
-factor_list = []
+    for feat in feature_dict.keys():
+
+        base_amount = st.sidebar.number_input("Input base value", value=1, format="%d")
+        # periods = st.sidebar.number_input("Set date_range periods", value=1, min_value=0)
+
+        factor_list.append(
+            TemperatureFactor(
+                feature=feat,
+                feature_values=feature_dict[feat],
+                col_name=f"feature_factor_{feat}",
+            )
+        )
 
 
 # -------------------------
 # add feature related factors
 
-st.sidebar.subheader("Select factor for feature")
+# st.sidebar.subheader("Select factor for feature")
 
 feature_factor_dict = {
     "random_factor": RandomFeatureFactor,
@@ -99,66 +126,12 @@ feature_factor_dict = {
     #"humidity_factor": HumidityFeatureFactor,
 
 }
-periods = None
-base_amount = None
-factor_switch_dict = {}
-for feat in feature_dict.keys():
-
-    factor_switch = st.sidebar.checkbox(f"{feat}", key=f"sensor_switch_{feat}")
-
-    if factor_switch:
-        periods = st.sidebar.number_input("Set date_range periods", value=1, min_value=0)
-        feature_factor_options = st.sidebar.multiselect(
-            f"select factor for [{feat}]",
-            ("temperature_factor", "humidity_factor", "random_factor")
-        )
-        base_amount = st.sidebar.number_input("Input base value", value=1, format="%d")
-        if len(feature_factor_options) > 0:
-            for factor in feature_factor_options:
-
-                if factor == "temperature_factor":
-
-                    factor_list.append(
-                        TemperatureFactor(
-                            feature=feat,
-                            feature_values=feature_dict[feat],
-                            col_name=f"temperature_feature_factor_{feat}",
-                        )
-                    )
-                if factor == "random_factor":
-                    factor_list.append(
-                        RandomFeatureFactor(
-                            feature=feat,
-                            feature_values=feature_dict[feat],
-                            col_name=f"random_feature_factor_{feat}",
-                        )
-                    )
-
-
-
-# add global factors
-
-
-
-# ---------------------------
-# select time period
-
-st.subheader("Input start date and end date")
-col1, col2 = st.columns(2)
-with col1:
-    start_date = st.date_input(
-        "Start time", datetime.datetime(2021, 1, 1)
-    )
-with col2:
-    end_date = st.date_input(
-        "End time", datetime.datetime(2021, 1, 3)
-    )
 
 # generate time series
 g: Generator = Generator(
     factors=set(factor_list),
     features=feature_dict,
-    date_range=pd.date_range(start_date, end_date),
+    date_range=daterange,
     base_value=base_amount,
 )
 df_values = g.generate()
@@ -219,6 +192,18 @@ else:
 
     st.altair_chart(base, use_container_width=True)
 
+# -------------
+# show dataframe
+
+col1, col2 = st.columns(2)
+with col1:
+    show_base_df = st.checkbox("Show dataframe")
+with col2:
+    topn = st.number_input("Top N rows", value=50, format="%d")
+if show_base_df:
+    show_col = ["date"] + vis_sensor_l + ["value"]
+    st.dataframe(df_vis[show_col].head(topn))
+
 
 # --------------
 # download dataframe
@@ -238,14 +223,4 @@ def get_table_download_link(df):
 st.markdown(get_table_download_link(df_vis), unsafe_allow_html=True)
 
 
-# -------------
-# show dataframe
 
-col1, col2 = st.columns(2)
-with col1:
-    show_base_df = st.checkbox("Show dataframe")
-with col2:
-    topn = st.number_input("Top N rows", value=50, format="%d")
-if show_base_df:
-    show_col = ["date"] + vis_sensor_l + ["value"]
-    st.dataframe(df_vis[show_col].head(topn))
